@@ -197,19 +197,27 @@ it('bounds pending result UUID association to two list passes and releases it on
         get(array, key, receiver) {
           if (numeric(key)) {
             counts.validation += 1
+            return array[Number(key)]
           }
           if (key === 'filter') {
             return (callback: (value: string, index: number, array: string[]) => unknown) =>
               new Proxy(array.filter.call(receiver, callback), {
-                get(filtered, property, filteredReceiver) {
+                get(filtered, property) {
                   if (numeric(property)) {
                     counts.membership += 1
+                    return filtered[Number(property)]
                   }
-                  return Reflect.get(filtered, property, filteredReceiver)
+                  if (property === 'length' || property === 'includes') {
+                    return filtered[property]
+                  }
+                  throw new Error(`Unexpected membership-list property: ${String(property)}`)
                 }
               })
           }
-          return Reflect.get(array, key, receiver)
+          if (key === 'length' || key === 'constructor') {
+            return array[key]
+          }
+          throw new Error(`Unexpected validation-list property: ${String(key)}`)
         }
       }
     )
