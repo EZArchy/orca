@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import { ClaudeAssistantFailures } from './claude-assistant-failures'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 
 const entry = z.looseObject({ kind: z.string() })
@@ -184,4 +185,54 @@ describe('captured Claude authentication failure', () => {
       translator.dispose()
     }
   )
+})
+
+it('bounds pending result UUID association to two list passes and releases it on settlement', () => {
+  for (const size of [64, 640]) {
+    const counts = { validation: 0, membership: 0 }
+    const numeric = (key: string | symbol) => typeof key === 'string' && /^\d+$/.test(key)
+    const uuids = new Proxy(
+      Array.from({ length: size }, (_, i) => (i === size - 1 ? 'u1' : `other-${i}`)),
+      {
+        get(array, key, receiver) {
+          if (numeric(key)) {
+            counts.validation += 1
+          }
+          if (key === 'filter') {
+            return (callback: (value: string, index: number, array: string[]) => unknown) =>
+              new Proxy(array.filter.call(receiver, callback), {
+                get(filtered, property, filteredReceiver) {
+                  if (numeric(property)) {
+                    counts.membership += 1
+                  }
+                  return Reflect.get(filtered, property, filteredReceiver)
+                }
+              })
+          }
+          return Reflect.get(array, key, receiver)
+        }
+      }
+    )
+    for (const outcome of ['match', 'mismatch', 'success']) {
+      const failures = new ClaudeAssistantFailures()
+      const result = { session_id: 's', is_error: outcome !== 'success', user_message_uuids: uuids }
+      counts.validation = counts.membership = 0
+      expect(failures.resultAlreadyShown(result)).toBe(false)
+      expect(counts).toEqual({ validation: 0, membership: 0 })
+      failures.assistant({
+        type: 'assistant',
+        session_id: 's',
+        error: 'model_not_found',
+        user_message_uuid: outcome === 'mismatch' ? 'absent' : 'u1',
+        message: { content: [] }
+      })
+      expect(failures.resultAlreadyShown(result)).toBe(outcome === 'match')
+      expect(counts.validation).toBeGreaterThanOrEqual(size)
+      expect(counts.membership).toBeGreaterThanOrEqual(outcome === 'success' ? 0 : size)
+      expect(counts.validation + counts.membership).toBeLessThanOrEqual(2 * size + 1)
+      counts.validation = counts.membership = 0
+      expect(failures.resultAlreadyShown({ ...result, is_error: true })).toBe(false)
+      expect(counts).toEqual({ validation: 0, membership: 0 })
+    }
+  }
 })
