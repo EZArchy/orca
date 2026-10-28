@@ -6,7 +6,7 @@ import type { AgentSessionAccountKind } from '../../shared/agent-session-availab
 
 /** Associates the assistant's typed error with its duplicate result, never with error text. */
 export class ClaudeAssistantFailures {
-  private readonly shown = new BoundedMap<string, true>({ maxEntries: 128 })
+  private readonly shown = new BoundedMap<string, string | null>({ maxEntries: 128 })
   constructor(
     private readonly account?: () => AgentSessionAccountKind | undefined,
     private readonly model?: () => string | undefined
@@ -19,6 +19,9 @@ export class ClaudeAssistantFailures {
       message.type !== 'assistant' ||
       (!unavailable && message.error !== 'authentication_failed')
     ) {
+      if (message.type === 'user' || message.type === 'assistant') {
+        this.shown.delete(this.scopeKey(message))
+      }
       return null
     }
     const content = claudeRecord(message.message)?.content
@@ -30,10 +33,7 @@ export class ClaudeAssistantFailures {
           })
           .join('\n')
       : ''
-    const key = this.key(message) ?? (unavailable ? this.scopeKey(message) : null)
-    if (key) {
-      this.shown.set(key, true)
-    }
+    this.shown.set(this.scopeKey(message), claudeText(message.user_message_uuid))
     return {
       kind: 'status' as const,
       tone: 'error' as const,
@@ -50,23 +50,28 @@ export class ClaudeAssistantFailures {
   }
 
   resultAlreadyShown(message: Record<string, unknown>): boolean {
-    const exact = this.key(message)
-    const key = exact && this.shown.has(exact) ? exact : this.scopeKey(message)
-    if (!key || !this.shown.has(key)) {
+    const key = this.scopeKey(message)
+    const shownUuid = this.shown.get(key)
+    if (shownUuid === undefined) {
       return false
     }
     this.shown.delete(key)
-    return message.is_error === true
+    const resultUuids = Array.isArray(message.user_message_uuids)
+      ? message.user_message_uuids.filter(
+          (uuid): uuid is string => typeof uuid === 'string' && uuid.length > 0
+        )
+      : []
+    const resultUuid = claudeText(message.user_message_uuid)
+    if (resultUuid) {
+      resultUuids.push(resultUuid)
+    }
+    return (
+      message.is_error === true &&
+      (!shownUuid || resultUuids.length === 0 || resultUuids.includes(shownUuid))
+    )
   }
 
   private scopeKey(message: Record<string, unknown>): string {
     return JSON.stringify([message.session_id, message.parent_tool_use_id ?? null])
-  }
-
-  private key(message: Record<string, unknown>): string | null {
-    const uuid = claudeText(message.user_message_uuid)
-    return uuid
-      ? JSON.stringify([message.session_id, message.parent_tool_use_id ?? null, uuid])
-      : null
   }
 }

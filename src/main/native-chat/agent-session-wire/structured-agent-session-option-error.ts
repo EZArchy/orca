@@ -1,4 +1,5 @@
 import { AGENT_SESSION_FAILURE_COPY } from '../../../shared/agent-session-failure-copy'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 
 /** Option validation failed before the provider session was mutated. */
 export class AgentSessionOptionRejectedError extends Error {
@@ -6,7 +7,7 @@ export class AgentSessionOptionRejectedError extends Error {
     cause: unknown,
     /** providerStarting means the value is valid but cannot be applied yet. */
     readonly refusalReason: 'optionRejected' | 'providerStarting' = 'optionRejected',
-    readonly rejectedModel?: string
+    readonly rejection?: SubmissionRejectionFact
   ) {
     super(cause instanceof Error ? cause.message : String(cause), { cause })
     this.name = 'AgentSessionOptionRejectedError'

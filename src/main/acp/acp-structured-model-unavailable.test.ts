@@ -20,21 +20,52 @@ const refusals = [
     name: 'Grok',
     code: -32602,
     message: 'Invalid params',
-    data: 'unknown model id'
+    data: 'unknown model id',
+    kind: 'modelUnavailable',
+    reason: "Grok couldn't use retired. Pick another model and send again."
   },
   {
     agent: 'omp',
     name: 'OMP',
     code: -32603,
     message: 'Internal error',
-    data: { details: 'Unknown ACP model: retired' }
+    data: { details: 'Unknown ACP model: retired' },
+    kind: 'modelUnavailable',
+    reason: "OMP couldn't use retired. Pick another model and send again."
+  },
+  {
+    agent: 'grok',
+    name: 'Grok authentication required',
+    code: -32000,
+    message: 'Authentication required',
+    data: undefined,
+    kind: 'notSignedIn',
+    reason: 'notSignedIn'
+  },
+  {
+    agent: 'grok',
+    name: 'Grok temporarily unavailable',
+    code: -32603,
+    message: 'Internal error',
+    data: { details: 'Provider temporarily unavailable' },
+    kind: 'providerRejected',
+    reason: "Grok didn't accept this message: Provider temporarily unavailable."
+  },
+  {
+    agent: 'omp',
+    name: 'OMP missing session',
+    code: -32002,
+    message: 'Resource not found: acp-session-1',
+    data: { uri: 'acp-session-1' },
+    kind: 'providerRejected',
+    reason: "OMP didn't accept this message: Resource not found: acp-session-1."
   }
 ] as const
 
 afterEach(closeProviderTimelineRigs)
 
 it.each(refusals)(
-  '$name keeps a rejected model on repeated sends, then sends after a new pick',
+  '$name preserves the selected model and the actual rejection',
   async (failure) => {
     const spec = acpLaunchSpecFor(failure.agent)!
     const { host, rig, store, ready } = await openHostRig({
@@ -79,7 +110,9 @@ it.each(refusals)(
       ).toMatchObject({ ok: true })
     }
     await pick('retired')
-    for (const text of ['first attempt', 'second attempt']) {
+    const attempts =
+      failure.kind === 'modelUnavailable' ? ['first attempt', 'second attempt'] : ['first attempt']
+    for (const text of attempts) {
       const messageId = await send(host, text)
       await waitFor(async () => {
         const snapshot = await host.journalSnapshot(SESSION)
@@ -87,9 +120,14 @@ it.each(refusals)(
           snapshot.submissions.find((entry) => entry.clientMessageId === messageId)
         ).toMatchObject({
           dispatchState: 'rejected',
-          rejection: { kind: 'modelUnavailable' },
-          reason: `${failure.name} couldn't use retired. Pick another model and send again.`
+          rejection: { kind: failure.kind },
+          ...(failure.kind === 'notSignedIn' ? {} : { reason: failure.reason })
         })
+        if (failure.kind === 'notSignedIn') {
+          expect(
+            snapshot.submissions.find((entry) => entry.clientMessageId === messageId)?.reason
+          ).toContain('Sign in')
+        }
       })
       expect(store.getRecord(SESSION)?.options?.model).toBe('retired')
       expect((await host.readOptions(SESSION, { readsWithoutModel: true })).current.model).toBe(
@@ -99,14 +137,16 @@ it.each(refusals)(
     }
     const failed = await host.journalSnapshot(SESSION)
     expect(
-      failed.submissions.filter((entry) => entry.rejection?.kind === 'modelUnavailable')
-    ).toHaveLength(2)
+      failed.submissions.filter((entry) => entry.rejection?.kind === failure.kind)
+    ).toHaveLength(attempts.length)
     const rows = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
     expect(
-      rows.filter(
-        (row) => row.body.kind === 'status' && row.body.failure?.kind === 'modelUnavailable'
-      )
+      rows.filter((row) => row.body.kind === 'status' && row.body.failure?.kind === failure.kind)
     ).toHaveLength(0)
+    if (failure.kind !== 'modelUnavailable') {
+      await host.close(SESSION, 'user-close')
+      return
+    }
     await pick('grok-4.7')
     await send(host, 'after a new pick')
     await waitFor(() => expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1))

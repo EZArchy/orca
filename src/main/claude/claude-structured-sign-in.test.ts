@@ -7,6 +7,20 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 const entry = z.looseObject({ kind: z.string() })
 const capturedFrame = z.object({ at: z.number(), frame: z.record(z.string(), z.unknown()) })
 
+async function captureFrames() {
+  const capture = await readFile(
+    new URL('./__fixtures__/claude-lifecycle-capture-auth-failed.jsonl', import.meta.url),
+    'utf8'
+  )
+  return capture
+    .trim()
+    .split('\n')
+    .flatMap((line) => {
+      const value: unknown = JSON.parse(line)
+      return entry.parse(value).kind === 'frame' ? [capturedFrame.parse(value)] : []
+    })
+}
+
 async function replay(account: 'system' | 'managed', removeTypedError = false) {
   const bodies: AgentJournalItemBody[] = []
   const translator = createClaudeJournalTranslator({
@@ -17,16 +31,7 @@ async function replay(account: 'system' | 'managed', removeTypedError = false) {
       publish: () => {}
     }
   })
-  const capture = await readFile(
-    new URL('./__fixtures__/claude-lifecycle-capture-auth-failed.jsonl', import.meta.url),
-    'utf8'
-  )
-  for (const line of capture.trim().split('\n')) {
-    const value: unknown = JSON.parse(line)
-    if (entry.parse(value).kind !== 'frame') {
-      continue
-    }
-    const { at, frame } = capturedFrame.parse(value)
+  for (const { at, frame } of await captureFrames()) {
     if (removeTypedError) {
       delete frame.error
     }
@@ -70,4 +75,113 @@ describe('captured Claude authentication failure', () => {
       )
     ).toBe(false)
   })
+
+  it.each([
+    ['u1', 'u1'],
+    [undefined, 'u1'],
+    ['u1', undefined],
+    [undefined, undefined]
+  ])(
+    'associates optional send identities %s / %s only until settlement',
+    async (assistantId, resultId) => {
+      const frames = (await captureFrames()).map(({ frame }) => frame)
+      for (const error of ['authentication_failed', 'model_not_found']) {
+        const bodies: AgentJournalItemBody[] = []
+        const translator = createClaudeJournalTranslator({
+          model: () => 'opus[1m]',
+          sink: {
+            appendItem: (_identity, body) => bodies.push(body),
+            appendTombstone: () => {},
+            publish: () => {}
+          }
+        })
+        for (const frame of frames) {
+          translator.handle({
+            type: 'message',
+            sessionId: 'session',
+            message: {
+              ...frame,
+              ...(frame.type === 'assistant' ? { error, user_message_uuid: assistantId } : {}),
+              ...(frame.type === 'result'
+                ? {
+                    user_message_uuid: resultId,
+                    user_message_uuids: resultId ? [resultId] : undefined
+                  }
+                : {})
+            }
+          })
+        }
+        expect(
+          bodies.filter((body) => body.kind === 'status' && body.tone === 'error')
+        ).toHaveLength(1)
+        translator.handle({
+          type: 'message',
+          sessionId: 'session',
+          message: {
+            ...frames.find((frame) => frame.type === 'result'),
+            uuid: 'unrelated-result',
+            user_message_uuid: 'u2',
+            user_message_uuids: ['u2'],
+            result: 'API Error: 529 upstream overloaded'
+          }
+        })
+        expect(bodies.at(-1)).toMatchObject({
+          kind: 'status',
+          text: 'API Error: 529 upstream overloaded'
+        })
+        translator.dispose()
+      }
+    }
+  )
+
+  it.each(['different send', 'different send list', 'next user', 'successful result'])(
+    'does not let a pending failure hide a later error after %s',
+    async (boundary) => {
+      const frames = (await captureFrames()).map(({ frame }) => frame)
+      const bodies: AgentJournalItemBody[] = []
+      const translator = createClaudeJournalTranslator({
+        sink: {
+          appendItem: (_identity, body) => bodies.push(body),
+          appendTombstone: () => {},
+          publish: () => {}
+        }
+      })
+      const handle = (message: Record<string, unknown>) =>
+        translator.handle({ type: 'message', sessionId: 'session', message })
+      const assistant = frames.find((frame) => frame.type === 'assistant')!
+      const result = frames.find((frame) => frame.type === 'result')!
+      handle({ ...assistant, error: 'model_not_found', user_message_uuid: 'u1' })
+      if (boundary === 'next user') {
+        handle({
+          type: 'user',
+          uuid: 'u2',
+          session_id: assistant.session_id,
+          message: { role: 'user', content: [{ type: 'text', text: 'try again' }] }
+        })
+      }
+      handle({
+        ...result,
+        user_message_uuid: boundary === 'different send' ? 'u2' : undefined,
+        user_message_uuids: boundary === 'different send list' ? ['u2'] : undefined,
+        is_error: boundary !== 'successful result',
+        terminal_reason: boundary === 'successful result' ? 'completed' : 'api_error',
+        result: boundary === 'successful result' ? 'ok' : 'API Error: 529 upstream overloaded'
+      })
+      if (boundary !== 'successful result') {
+        expect(bodies.at(-1)).toMatchObject({
+          kind: 'status',
+          text: 'API Error: 529 upstream overloaded'
+        })
+      }
+      handle({
+        ...result,
+        uuid: 'later-result',
+        user_message_uuid: 'u1',
+        user_message_uuids: ['u1'],
+        result: 'API Error: 500 later failure'
+      })
+      expect(bodies.at(-1)).toMatchObject({ kind: 'status', text: 'API Error: 500 later failure' })
+      translator.dispose()
+    }
+  )
 })
