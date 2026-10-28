@@ -8,8 +8,8 @@ import type {
   NativeChatImageRefBlock
 } from '../../../../../src/shared/native-chat-types'
 import {
-  AGENT_SESSION_HOST_STATUS_COPY,
-  isAgentSessionHostStatusPresentation
+  isAgentSessionHostStatusPresentation,
+  type AgentSessionHostStatusPresentation
 } from '../../../../../src/shared/agent-session-host-status-rows'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
 import { isAgentSessionAttachmentStorePath } from '../../../../../src/shared/agent-session-attachments'
@@ -27,6 +27,30 @@ import {
 } from './mobile-native-chat-message-styles'
 import type { MobileNativeChatVisualRender } from '../visual/mobile-native-chat-visual-context'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+
+function hostStatusCopy(presentation: AgentSessionHostStatusPresentation, t: Translate): string {
+  switch (presentation) {
+    case 'history-repaired':
+      return t(
+        'chat.nativeChatProse.historyRepaired',
+        "Part of this chat's history couldn't be loaded."
+      )
+    case 'history-item-too-large':
+      return t(
+        'chat.nativeChatProse.historyItemTooLarge',
+        'This part of the chat was too large to show.'
+      )
+    case 'continued-outside':
+      return t('chat.nativeChatProse.continuedOutside', 'Continued outside this chat.')
+    case 'continued-outside-rewound':
+      return t(
+        'chat.nativeChatProse.continuedOutsideRewound',
+        "Continued outside this chat. Earlier replies above are no longer in this conversation's history."
+      )
+  }
+}
 
 export function Prose({
   block,
@@ -53,6 +77,7 @@ export function Prose({
   onLongPress?: () => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   if (isTextBlock(block)) {
     if (isAgentSessionHostStatusPresentation(block.presentation)) {
       return (
@@ -60,7 +85,7 @@ export function Prose({
           selectable={INLINE_TEXT_SELECTION}
           style={[styles.hostNotice, scaledType(TEXT_SIZE, fontScale)]}
         >
-          {AGENT_SESSION_HOST_STATUS_COPY[block.presentation]}
+          {hostStatusCopy(block.presentation, t)}
         </Text>
       )
     }
@@ -109,6 +134,7 @@ function ImageAttachment({
   onLongPress?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const { openImage, imageClient } = useContext(MobileNativeChatRowOverlaysContext)
   const direct = block.url ?? block.path
   const renderable = isRenderableImageUri(direct) ? direct : null
@@ -136,14 +162,14 @@ function ImageAttachment({
   const read =
     storedPath && stored?.path === storedPath && stored.client === imageClient ? stored : null
   const uri = renderable ?? read?.uri
-  const label = block.alt ?? 'Attached image'
+  const label = block.alt ?? t('chat.nativeChatProse.attachedImage', 'Attached image')
   if (storedPath && !read) {
     return <View style={styles.imageThumb} accessibilityLabel={label} />
   }
   if (!uri) {
     return (
       <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
-        🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
+        🖼 {block.alt ?? block.path ?? block.url ?? t('chat.nativeChatProse.image', 'image')}
       </Text>
     )
   }
@@ -153,7 +179,7 @@ function ImageAttachment({
       onLongPress={onLongPress}
       accessibilityRole="imagebutton"
       accessibilityLabel={label}
-      accessibilityHint="Opens the image full size"
+      accessibilityHint={t('chat.nativeChatProse.openImageHint', 'Opens the image full size')}
     >
       <Image source={{ uri }} style={styles.imageThumb} resizeMode="contain" />
     </Pressable>

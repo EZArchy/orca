@@ -10,6 +10,7 @@ import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
@@ -31,6 +32,7 @@ export function MobileSessionCommandDock({
   keysInRail: boolean
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     insets,
     bufferedTerminalDraftState,
@@ -79,8 +81,14 @@ export function MobileSessionCommandDock({
               disabled={!canSend}
               onPress={focusLiveInput}
               accessibilityRole="button"
-              accessibilityLabel="Show keyboard for live terminal input"
-              accessibilityHint="Typed text is sent directly to the active terminal"
+              accessibilityLabel={t(
+                'session.commandDock.showLiveInputKeyboard',
+                'Show keyboard for live terminal input'
+              )}
+              accessibilityHint={t(
+                'session.commandDock.liveInputHint',
+                'Typed text is sent directly to the active terminal'
+              )}
             >
               <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
               <MobileTerminalLiveInputStatus
@@ -144,7 +152,7 @@ export function MobileSessionCommandDock({
               value={bufferedTerminalDraftState.input}
               // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
               onChangeText={bufferedTerminalDraftState.setInput}
-              placeholder="Type a command…"
+              placeholder={t('session.commandDock.commandPlaceholder', 'Type a command…')}
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={autocompleteEnabled}
@@ -179,7 +187,7 @@ export function MobileSessionCommandDock({
               style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
               disabled={!canSend}
               onPress={() => void handleSend()}
-              accessibilityLabel="Send command"
+              accessibilityLabel={t('session.commandDock.sendCommand', 'Send command')}
             >
               <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
             </Pressable>

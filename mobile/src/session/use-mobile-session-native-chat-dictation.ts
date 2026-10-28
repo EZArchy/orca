@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { triggerError } from '../platform/haptics'
 import { useClipboardWriter } from '../platform/clipboard'
+import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
 import {
   appendBufferedDictation,
   routeDictationTranscript
@@ -124,8 +125,8 @@ export function useMobileSessionNativeChatDictation(
   const keepUndeliveredDictation = (text: string) => {
     triggerError()
     void clipboard.writeText(text).then(
-      () => showToast("Couldn't insert dictation, so it was copied to the clipboard"),
-      () => showToast("Couldn't insert dictation")
+      () => showToast(nativeChatDictationCopy.insertFailedCopied()),
+      () => showToast(nativeChatDictationCopy.insertFailed())
     )
   }
 
@@ -150,7 +151,7 @@ export function useMobileSessionNativeChatDictation(
             appendBufferedDictation(current, text)
           )
         }
-        showToast('Dictation inserted')
+        showToast(nativeChatDictationCopy.inserted())
         return
       }
       const routeContext = dictationRouteContextRef.current
@@ -167,7 +168,7 @@ export function useMobileSessionNativeChatDictation(
             (await flushPendingLiveInputBeforeExternalSend(insertHandle)) &&
             (await sendLiveTerminalInput(insertHandle, route.text))
           if (sent) {
-            showToast('Dictation inserted')
+            showToast(nativeChatDictationCopy.inserted())
           } else {
             keepUndeliveredDictation(route.text)
           }
@@ -175,7 +176,7 @@ export function useMobileSessionNativeChatDictation(
         return
       }
       setInput((current) => appendBufferedDictation(current, route.text))
-      showToast('Dictation inserted')
+      showToast(nativeChatDictationCopy.inserted())
     },
     onError: (err) => {
       dictationRouteContextRef.current = null

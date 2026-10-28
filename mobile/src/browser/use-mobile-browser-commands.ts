@@ -1,4 +1,5 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
@@ -227,7 +228,7 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
       { suppressError: true }
     )
     if (result !== null) {
-      onToast('Sent')
+      onToast(translate('browser.useBrowserCommands.sent', 'Sent'))
     } else {
       setKeyboardValue(text)
     }
@@ -264,7 +265,14 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
           : {
               ...current,
               pending: undefined,
-              ...(result === null ? { error: 'That answer did not reach the page.' } : {})
+              ...(result === null
+                ? {
+                    error: translate(
+                      'browser.useBrowserCommands.dialogAnswerFailed',
+                      'That answer did not reach the page.'
+                    )
+                  }
+                : {})
             }
       )
     },

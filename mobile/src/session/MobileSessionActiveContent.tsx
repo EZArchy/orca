@@ -6,6 +6,7 @@ import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -20,6 +21,7 @@ export function MobileSessionActiveContent({
   controller: MobileSessionController
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,
@@ -102,7 +104,9 @@ export function MobileSessionActiveContent({
     </View>
   ) : showEmptyState ? (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyText}>No tabs in this session</Text>
+      <Text style={styles.emptyText}>
+        {t('session.activeContent.noTabs', 'No tabs in this session')}
+      </Text>
       {createError ? <Text style={styles.createError}>{createError}</Text> : null}
       <View style={styles.emptyActions}>
         <Pressable
@@ -117,7 +121,9 @@ export function MobileSessionActiveContent({
           }}
         >
           <Text style={styles.createButtonText}>
-            {createTabBusy ? 'Creating...' : 'Create Tab'}
+            {createTabBusy
+              ? t('session.activeContent.creatingTab', 'Creating...')
+              : t('session.activeContent.createTab', 'Create Tab')}
           </Text>
         </Pressable>
       </View>
@@ -147,7 +153,7 @@ export function MobileSessionActiveContent({
         documentId={JSON.stringify([hostId, executionHost, worktreeId, activeFileTab.id])}
         client={client}
         doc={fileDocs.get(activeFileTab.id)}
-        title={activeFileTab.title || 'File'}
+        title={activeFileTab.title || t('session.activeContent.fileTitle', 'File')}
         relativePath={activeFileTab.relativePath}
         language={activeFileTab.language}
         diffCommentActions={
@@ -196,17 +202,24 @@ export function MobileSessionActiveContent({
       )}
       <Text style={styles.emptyText}>
         {isPendingTerminalRecoveryParked
-          ? 'Terminal is taking longer than expected'
-          : activePendingTerminalTab.title || 'Loading terminal'}
+          ? t(
+              'session.activeContent.terminalTakingLonger',
+              'Terminal is taking longer than expected'
+            )
+          : activePendingTerminalTab.title ||
+            t('session.activeContent.loadingTerminal', 'Loading terminal')}
       </Text>
       {isPendingTerminalRecoveryParked && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Retry loading terminal"
+          accessibilityLabel={t(
+            'session.activeContent.retryLoadingTerminal',
+            'Retry loading terminal'
+          )}
           style={({ pressed }) => [styles.createButton, pressed && styles.newTerminalButtonPressed]}
           onPress={() => void retryPendingTerminalRecovery()}
         >
-          <Text style={styles.createButtonText}>Retry</Text>
+          <Text style={styles.createButtonText}>{t('common.retry', 'Retry')}</Text>
         </Pressable>
       )}
     </View>
