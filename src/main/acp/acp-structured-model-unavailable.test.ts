@@ -21,8 +21,9 @@ const refusals = [
     code: -32602,
     message: 'Invalid params',
     data: 'unknown model id',
-    kind: 'modelUnavailable',
-    reason: "Grok couldn't use retired. Pick another model and send again."
+    kind: 'providerRejected',
+    modelRefusal: true,
+    reason: "Grok didn't accept this message: unknown model id."
   },
   {
     agent: 'omp',
@@ -30,8 +31,9 @@ const refusals = [
     code: -32603,
     message: 'Internal error',
     data: { details: 'Unknown ACP model: retired' },
-    kind: 'modelUnavailable',
-    reason: "OMP couldn't use retired. Pick another model and send again."
+    kind: 'providerRejected',
+    modelRefusal: true,
+    reason: "OMP didn't accept this message: Unknown ACP model: retired."
   },
   {
     agent: 'grok',
@@ -39,12 +41,14 @@ const refusals = [
     code: -32000,
     message: 'Authentication required',
     data: undefined,
+    modelRefusal: false,
     kind: 'notSignedIn',
     reason: 'notSignedIn'
   },
   {
     agent: 'grok',
     name: 'Grok temporarily unavailable',
+    modelRefusal: false,
     code: -32603,
     message: 'Internal error',
     data: { details: 'Provider temporarily unavailable' },
@@ -54,6 +58,7 @@ const refusals = [
   {
     agent: 'omp',
     name: 'OMP missing session',
+    modelRefusal: false,
     code: -32002,
     message: 'Resource not found: acp-session-1',
     data: { uri: 'acp-session-1' },
@@ -110,8 +115,7 @@ it.each(refusals)(
       ).toMatchObject({ ok: true })
     }
     await pick('retired')
-    const attempts =
-      failure.kind === 'modelUnavailable' ? ['first attempt', 'second attempt'] : ['first attempt']
+    const attempts = failure.modelRefusal ? ['first attempt', 'second attempt'] : ['first attempt']
     for (const text of attempts) {
       const messageId = await send(host, text)
       await waitFor(async () => {
@@ -143,7 +147,7 @@ it.each(refusals)(
     expect(
       rows.filter((row) => row.body.kind === 'status' && row.body.failure?.kind === failure.kind)
     ).toHaveLength(0)
-    if (failure.kind !== 'modelUnavailable') {
+    if (!failure.modelRefusal) {
       await host.close(SESSION, 'user-close')
       return
     }
