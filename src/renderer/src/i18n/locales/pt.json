@@ -16548,6 +16548,7 @@
         "typeHtml": "HTML"
       },
       "NewWorkspaceComposerCard": {
+        "openExistingWorkspace": "Abrir espaço de trabalho existente",
         "createMultiple": "Criar mais",
         "cbb47ee0dc": "Disponível apenas para projetos Git locais.",
         "d861de981b": "Checkout esparso",
