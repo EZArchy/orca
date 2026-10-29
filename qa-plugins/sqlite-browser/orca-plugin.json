@@ -1,0 +1,27 @@
+{
+  "manifestVersion": 2,
+  "id": "sqlite-browser",
+  "publisher": "brennanb2025",
+  "name": "SQLite Browser",
+  "version": "1.0.0",
+  "execution": "sandboxed-ui",
+  "description": "Browse SQLite databases in Orca's editor: every table and view, its schema, and millions of rows, read-only.",
+  "license": "MIT",
+  "repository": "https://github.com/brennanb2025/orca-plugins/tree/main/plugins/sqlite-browser",
+  "engines": {
+    "orca": ">=1.4.244"
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "id": "sqlite",
+        "title": "SQLite",
+        "extensions": [".db", ".sqlite", ".sqlite3", ".db3"],
+        "entry": "editor/index.html",
+        "priority": "default",
+        "contentKind": "bytes"
+      }
+    ]
+  },
+  "capabilities": []
+}
