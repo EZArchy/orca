@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createCombinedDiffLoadScheduler } from './combined-diff-load-scheduler'
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -15,6 +15,41 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 describe('combined diff load scheduler', () => {
+  it.each([10, 100])(
+    'prioritizes a visible row without scanning %i retained requests',
+    async (count) => {
+      const blocker = deferred()
+      const started: number[] = []
+      const rendered = new Set([0, count + 1])
+      const getRenderedIndices = vi.fn(() => rendered)
+      const isSectionExpanded = vi.fn(() => true)
+      const scheduler = createCombinedDiffLoadScheduler({
+        getRenderedIndices,
+        isSectionExpanded,
+        schedule: (callback) => callback(),
+        loadSection: async (index) => {
+          started.push(index)
+          if (index === 0) {
+            await blocker.promise
+          }
+        }
+      })
+      scheduler.request(0)
+      getRenderedIndices.mockClear()
+      isSectionExpanded.mockClear()
+      for (let index = 1; index <= count; index += 1) {
+        scheduler.request(index)
+      }
+      scheduler.request(count + 1, { viewportOnly: true })
+      expect(getRenderedIndices.mock.calls.length).toBeLessThan(4)
+      blocker.resolve()
+      await flushMicrotasks()
+      expect(started.slice(0, 2)).toEqual([0, count + 1])
+      expect(isSectionExpanded.mock.calls.length).toBeLessThan(8)
+      scheduler.dispose()
+    }
+  )
+
   it('defaults to serial section loads', async () => {
     const blockers = [deferred(), deferred()]
     const started: number[] = []
