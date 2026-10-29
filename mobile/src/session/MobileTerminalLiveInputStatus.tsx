@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native'
+import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { colors, typography } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -6,9 +7,10 @@ import {
   mobileDictationStatusTitle,
   type MobileDictationStatusFlags
 } from './MobileDictationStatusAnnouncement'
+import { MobileDictationGrapes, MobileDictationTimer } from './MobileDictationMeter'
 
 type MobileTerminalLiveInputStatusProps = {
-  readonly dictation: MobileDictationStatusFlags
+  readonly dictation: MobileDictationStatusFlags & Pick<UseMobileDictationResult, 'meter'>
   readonly dictationMode: string | undefined
   readonly isAttaching: boolean
   readonly liveInputText: string
@@ -36,9 +38,18 @@ export function MobileTerminalLiveInputStatus({
 
   return (
     <View style={styles.status}>
-      <Text style={styles.title} numberOfLines={1}>
-        {title}
-      </Text>
+      <View style={[styles.titleRow, dictation.isRecording && styles.meterRow]}>
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+        {dictation.isRecording ? (
+          <>
+            <MobileDictationTimer meter={dictation.meter} />
+            <View style={styles.spacer} />
+            <MobileDictationGrapes meter={dictation.meter} dotSize={3.5} />
+          </>
+        ) : null}
+      </View>
       <Text style={styles.detail} numberOfLines={1} ellipsizeMode="head">
         {detail}
       </Text>
@@ -50,6 +61,18 @@ const styles = themedStyleSheet(() => ({
   status: {
     flex: 1,
     gap: 1
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  // Pin the row so the taller meter doesn't push the second line down.
+  meterRow: {
+    height: 16
+  },
+  spacer: {
+    flex: 1
   },
   title: {
     color: colors.textPrimary,
